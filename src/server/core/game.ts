@@ -75,6 +75,7 @@ export async function loadSplash(): Promise<SplashResponse> {
     elapsedMs: view.elapsedMs,
     posted: view.posted,
     personalBest: view.personalBest,
+    leaderboard: view.leaderboard,
   };
 }
 

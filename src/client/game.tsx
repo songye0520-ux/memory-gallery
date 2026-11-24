@@ -1,9 +1,10 @@
 import './index.css';
 
-import { StrictMode, useEffect, useEffectEvent, useRef, useState } from 'react';
+import { StrictMode, useEffect, useEffectEvent, useRef, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { GameResponse, Painting } from '../shared/api';
 import { formatDuration } from '../shared/api';
+import coverUrl from './assets/cover.jpg';
 import { drawPainting } from './paint';
 
 export const App = () => {
@@ -88,6 +89,51 @@ export const App = () => {
     );
   }
 
+  if (data.phase === 'done') {
+    return (
+      <div className="game game-result">
+        <CoverHero
+          overlay={
+            <div className="cover-score">
+              <p className="cover-score-kicker">
+                {data.status === 'won' ? 'Chain complete' : 'Chain broken'}
+              </p>
+              <div className="cover-score-duo">
+                <div>
+                  <p className="cover-score-label">Time</p>
+                  <p className="cover-score-value">{formatDuration(data.elapsedMs)}</p>
+                </div>
+                <div>
+                  <p className="cover-score-label">Clears</p>
+                  <p className="cover-score-value">{data.score}</p>
+                </div>
+              </div>
+              {data.personalBest ? (
+                <p className="cover-score-meta">
+                  Best {data.personalBest.score} · rank {data.personalBest.rank}/
+                  {data.personalBest.players}
+                </p>
+              ) : null}
+            </div>
+          }
+        />
+        <div className="panel splash-enter-panel result-panel">
+          <p className="eyebrow">
+            {data.galleryName} · {data.dateLabel}
+          </p>
+          <ResultPanel
+            data={data}
+            busy={busy}
+            onShare={() => void post('/api/share')}
+            onReplay={() => void post('/api/replay')}
+          />
+          {error ? <p className="error">{error}</p> : null}
+          <Leaderboard entries={data.leaderboard} limit={8} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="game">
       <CubistShards />
@@ -141,21 +187,21 @@ export const App = () => {
             </div>
           </>
         ) : null}
-        {data.phase === 'done' ? (
-          <ResultPanel
-            data={data}
-            busy={busy}
-            onShare={() => void post('/api/share')}
-            onReplay={() => void post('/api/replay')}
-          />
-        ) : null}
         {error ? <p className="error">{error}</p> : null}
         <PersonalBestCard best={data.personalBest} />
-        <Leaderboard entries={data.leaderboard} />
+        <Leaderboard entries={data.leaderboard} limit={8} />
       </div>
     </div>
   );
 };
+
+const CoverHero = ({ overlay }: { overlay?: ReactNode }) => (
+  <div className={overlay ? 'splash-cover splash-cover-scored' : 'splash-cover'}>
+    <img src={coverUrl} alt="" className="splash-cover-img" aria-hidden />
+    <div className="splash-cover-veil" aria-hidden />
+    {overlay}
+  </div>
+);
 
 const CubistShards = () => (
   <>
@@ -200,60 +246,22 @@ const ResultPanel = ({
   onReplay: () => void;
 }) => (
   <section className="result">
-    <p className="result-label">{data.status === 'won' ? 'Chain complete' : 'Chain broken'}</p>
-    <div className="result-duo">
-      <div className="result-stat">
-        <p className="result-stat-label">This run · Time</p>
-        <p className="result-stat-value">{formatDuration(data.elapsedMs)}</p>
-      </div>
-      <div className="result-stat">
-        <p className="result-stat-label">This run · Clears</p>
-        <p className="result-stat-value">{data.score}</p>
-      </div>
-    </div>
-    {data.status === 'lost' ? (
-      <p className="meta">
-        {data.failedStep === 1
-          ? 'Time ran out before the first panel stuck.'
-          : `Broke on step ${data.failedStep}.`}
-      </p>
-    ) : (
-      <p className="meta">You kept every panel in today’s room.</p>
-    )}
     {data.canPost ? (
-      <>
-        <p className="meta">
-          Proud of today’s run? Leave a comment under this post with your score.
-        </p>
+      <div className="result-actions">
         <button type="button" className="seal" disabled={busy} onClick={onShare}>
           Leave a comment
         </button>
         <button type="button" className="ghost" disabled={busy} onClick={onReplay}>
           Play again
         </button>
-      </>
+      </div>
     ) : (
-      <>
-        <p className="meta">
-          {data.posted
-            ? 'Your score comment is under this post. You can start a new run anytime.'
-            : 'Replay anytime — only a better run updates your best.'}
-        </p>
+      <div className="result-actions">
         <button type="button" className="seal" disabled={busy} onClick={onReplay}>
           Play again
         </button>
-      </>
-    )}
-    {data.status === 'lost' && data.options ? (
-      <div className="grid">
-        {data.options.map((painting, index) => (
-          <div key={painting.id} className={index === data.revealIndex ? 'choice right' : 'choice'}>
-            <PaintingFrame painting={painting} />
-            {index === data.revealIndex ? <p className="caption">This one</p> : null}
-          </div>
-        ))}
       </div>
-    ) : null}
+    )}
   </section>
 );
 
@@ -300,32 +308,41 @@ const MEDALS = [
   { icon: '🥉', label: 'bronze' },
 ] as const;
 
-const Leaderboard = ({ entries }: { entries: GameResponse['leaderboard'] }) => (
-  <section>
-    <p className="leader-title">Today’s salon</p>
-    {entries.length === 0 ? <p className="meta">No scores yet.</p> : null}
-    <ol className="board">
-      {entries.map((entry, index) => {
-        const medal = MEDALS[index];
-        return (
-          <li key={`${entry.username}-${index}`}>
-            <span className="board-name">
-              <span>{entry.username}</span>
-              {medal ? (
-                <span className="medal" aria-label={medal.label}>
-                  {medal.icon}
-                </span>
-              ) : null}
-            </span>
-            <span className="score">
-              {entry.score} clears · {formatDuration(entry.elapsedMs)}
-            </span>
-          </li>
-        );
-      })}
-    </ol>
-  </section>
-);
+const Leaderboard = ({
+  entries,
+  limit = 8,
+}: {
+  entries: GameResponse['leaderboard'];
+  limit?: number;
+}) => {
+  const rows = entries.slice(0, limit);
+  return (
+    <section className="splash-board">
+      <p className="leader-title">Today’s salon</p>
+      {rows.length === 0 ? <p className="meta">No scores yet.</p> : null}
+      <ol className="board">
+        {rows.map((entry, index) => {
+          const medal = MEDALS[index];
+          return (
+            <li key={`${entry.username}-${index}`}>
+              <span className="board-name">
+                <span>{entry.username}</span>
+                {medal ? (
+                  <span className="medal" aria-label={medal.label}>
+                    {medal.icon}
+                  </span>
+                ) : null}
+              </span>
+              <span className="score">
+                {entry.score} clears · {formatDuration(entry.elapsedMs)}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+};
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -176,6 +176,7 @@ export type SplashResponse = {
   elapsedMs: number;
   posted: boolean;
   personalBest: PersonalBest | null;
+  leaderboard: LeaderEntry[];
 };
 
 type Likeness = 'distant' | 'palette' | 'twin' | 'kin';

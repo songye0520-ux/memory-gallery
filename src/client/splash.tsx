@@ -1,10 +1,11 @@
 import './index.css';
 
 import { requestExpandedMode } from '@devvit/web/client';
-import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode, useEffect, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { SplashResponse } from '../shared/api';
+import type { LeaderEntry, SplashResponse } from '../shared/api';
 import { formatDuration } from '../shared/api';
+import coverUrl from './assets/cover.jpg';
 
 export const Splash = () => {
   const [data, setData] = useState<SplashResponse | null>(null);
@@ -41,41 +42,37 @@ export const Splash = () => {
   }, [reloadToken]);
 
   if (data?.phase === 'done') {
+    const timeMs = data.personalBest?.elapsedMs ?? data.elapsedMs;
+    const clears = data.personalBest?.score ?? data.score;
     return (
-      <div className="splash splash-result">
-        <CubistShards />
-        <div className="panel">
+      <div className="splash splash-enter splash-result">
+        <CoverHero
+          overlay={
+            <div className="cover-score">
+              <p className="cover-score-kicker">
+                {data.personalBest ? 'Your best today' : 'Your run'}
+              </p>
+              <div className="cover-score-duo">
+                <div>
+                  <p className="cover-score-label">Time</p>
+                  <p className="cover-score-value">{formatDuration(timeMs)}</p>
+                </div>
+                <div>
+                  <p className="cover-score-label">Clears</p>
+                  <p className="cover-score-value">{clears}</p>
+                </div>
+              </div>
+              <p className="cover-score-meta">
+                {data.personalBest
+                  ? `Rank ${data.personalBest.rank}/${data.personalBest.players} · streak ${data.streak}`
+                  : `streak ${data.streak}`}
+              </p>
+            </div>
+          }
+        />
+        <div className="panel splash-enter-panel result-panel">
           <p className="eyebrow">
             {data.galleryName} · {data.dateLabel}
-          </p>
-          <p className="result-label">
-            {data.personalBest ? 'Your best today' : 'Your run'}
-          </p>
-          <div className="result-duo">
-            <div className="result-stat">
-              <p className="result-stat-label">Time</p>
-              <p className="result-stat-value">
-                {formatDuration(data.personalBest?.elapsedMs ?? data.elapsedMs)}
-              </p>
-            </div>
-            <div className="result-stat">
-              <p className="result-stat-label">Clears</p>
-              <p className="result-stat-value">
-                {data.personalBest?.score ?? data.score}
-              </p>
-            </div>
-          </div>
-          {data.personalBest ? (
-            <p className="result-stats">
-              Rank {data.personalBest.rank}/{data.personalBest.players} · streak {data.streak}
-            </p>
-          ) : (
-            <p className="result-stats">streak {data.streak}</p>
-          )}
-          <p className="meta">
-            {data.posted
-              ? 'You already left a score comment. Open to play again.'
-              : 'Open to leave a score comment or play again.'}
           </p>
           {error ? <p className="error">{error}</p> : null}
           <button
@@ -85,6 +82,7 @@ export const Splash = () => {
           >
             {data.posted ? 'Play again' : 'Open result'}
           </button>
+          <SplashLeaderboard entries={data.leaderboard} limit={8} />
         </div>
       </div>
     );
@@ -93,14 +91,11 @@ export const Splash = () => {
   const label = data ? buttonLabel(data) : 'Play';
 
   return (
-    <div className="splash">
-      <CubistShards />
-      <div className="panel">
+    <div className="splash splash-enter">
+      <CoverHero />
+      <div className="panel splash-enter-panel">
         <p className="eyebrow">Daily starry chain</p>
         <h1>Memory Gallery</h1>
-        <div className="splash-hero" aria-hidden>
-          <div className="splash-mark" />
-        </div>
         <p className="meta">
           {data
             ? `${data.galleryName} · ${data.dateLabel} · streak ${data.streak}`
@@ -108,6 +103,7 @@ export const Splash = () => {
               ? 'Could not open today’s room'
               : 'Opening today’s atelier'}
         </p>
+        {data ? <SplashLeaderboard entries={data.leaderboard} limit={8} /> : null}
         {error ? <p className="error">{error}</p> : null}
         {error ? (
           <button type="button" className="seal" onClick={() => setReloadToken((n) => n + 1)}>
@@ -128,13 +124,55 @@ export const Splash = () => {
   );
 };
 
-const CubistShards = () => (
-  <>
-    <div className="shard shard-a" aria-hidden />
-    <div className="shard shard-b" aria-hidden />
-    <div className="shard shard-c" aria-hidden />
-  </>
+const CoverHero = ({ overlay }: { overlay?: ReactNode }) => (
+  <div className={overlay ? 'splash-cover splash-cover-scored' : 'splash-cover'}>
+    <img src={coverUrl} alt="" className="splash-cover-img" aria-hidden />
+    <div className="splash-cover-veil" aria-hidden />
+    {overlay}
+  </div>
 );
+
+const MEDALS = [
+  { icon: '🥇', label: 'gold' },
+  { icon: '🥈', label: 'silver' },
+  { icon: '🥉', label: 'bronze' },
+] as const;
+
+const SplashLeaderboard = ({
+  entries,
+  limit = 8,
+}: {
+  entries: LeaderEntry[];
+  limit?: number;
+}) => {
+  const rows = entries.slice(0, limit);
+  return (
+    <section className="splash-board">
+      <p className="leader-title">Today’s salon</p>
+      {rows.length === 0 ? <p className="meta">No scores yet.</p> : null}
+      <ol className="board">
+        {rows.map((entry, index) => {
+          const medal = MEDALS[index];
+          return (
+            <li key={`${entry.username}-${index}`}>
+              <span className="board-name">
+                <span>{entry.username}</span>
+                {medal ? (
+                  <span className="medal" aria-label={medal.label}>
+                    {medal.icon}
+                  </span>
+                ) : null}
+              </span>
+              <span className="score">
+                {entry.score} clears · {formatDuration(entry.elapsedMs)}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+};
 
 function buttonLabel(data: SplashResponse): string {
   if (data.phase === 'choose') return 'Continue';
